@@ -1,0 +1,42 @@
+#!/bin/sh
+#
+# pre-push: run the same checks CI runs, before the push leaves the machine.
+#
+# Scope is deliberate. This runs the linter and the formatter check — fast and
+# offline. It does NOT run the suite: these tests hit a public demo API, so a
+# hook that ran them would block a push whenever somebody else's server is
+# asleep. That belongs in CI, where a retry is free.
+#
+# The checks are the REPORTING variants, never --fix. A hook that rewrites
+# files during `git push` pushes a version you never saw, and leaves the
+# corrected files uncommitted in your working tree.
+#
+# Escape hatch: `git push --no-verify` skips this and lets CI be the judge.
+
+set -e
+
+fail() {
+    echo ""
+    echo "  push blocked — $1"
+    echo "  fix:     $2"
+    echo "  bypass:  git push --no-verify"
+    echo ""
+    exit 1
+}
+
+# Prefer the project venv, fall back to whatever ruff is on PATH.
+if [ -x .venv/bin/ruff ]; then
+    RUFF=.venv/bin/ruff
+elif command -v ruff >/dev/null 2>&1; then
+    RUFF=ruff
+else
+    fail "ruff is not installed" "pip install -r requirements-dev.txt"
+fi
+
+echo "pre-push: ruff check"
+"$RUFF" check . || fail "Ruff found problems" "ruff check --fix ."
+
+echo "pre-push: ruff format"
+"$RUFF" format --check . || fail "formatting differs" "ruff format ."
+
+echo "pre-push: ok"

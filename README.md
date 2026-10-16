@@ -243,6 +243,37 @@ The tooling lives in `requirements-dev.txt`, deliberately apart from
 have to install a linter and a report renderer, and keeping them separate proves
 in CI that the suite runs on the production dependency set alone.
 
+### Pre-push hook
+
+```bash
+git config core.hooksPath .githooks    # one-time, per clone
+```
+
+`.githooks/pre-push` runs `ruff check` and `ruff format --check` before the push
+leaves the machine. If either exits non-zero, **the push is aborted and nothing
+reaches the remote**:
+
+```
+  push blocked — Ruff found problems
+  fix:     ruff check --fix .
+  bypass:  git push --no-verify
+```
+
+The manual `git config` is the one asymmetry with the JavaScript projects here,
+and it is worth understanding rather than working around. Husky is not magic: it
+sets `core.hooksPath` too. What it has that this repo does not is npm's
+`prepare` lifecycle script, which runs automatically after `npm install` and can
+therefore do the wiring for you. `pip install` has no equivalent hook, so the
+one-liner is explicit. (`pre-commit` would automate it, at the cost of a tool
+and a config file for something a four-line shell script already does.)
+
+The hook prefers `.venv/bin/ruff` and falls back to whatever `ruff` is on PATH,
+so it works whether or not the virtualenv is active.
+
+It deliberately does **not** run the suite: these tests hit a public demo API,
+and a hook that blocked a push because somebody else's server is asleep would be
+worse than no hook. That is CI's job, where a retry is free.
+
 ### Where this runs in CI
 
 Linting and formatting are their **own job**, not steps inside the test job.
