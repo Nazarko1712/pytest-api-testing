@@ -1,0 +1,53 @@
+# Ruff: linter and formatter in one tool.
+#
+# It replaces the usual Python stack of flake8 + isort + black + pyupgrade +
+# several plugins, which matters here for the same reason the JavaScript repos
+# in this portfolio use ESLint plus Prettier and nothing else: a test suite is
+# worth linting for the rules that catch a test which cannot fail, and every
+# extra tool is one more config file that drifts.
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+# Markdown is excluded because Ruff reformats fenced python blocks inside it,
+# and the README examples are written for a reader, not for the formatter: it
+# collapsed 'def test(...):\n    ...' onto one line, which is valid Python and
+# worse documentation.
+exclude = [".venv", "__pycache__", "reports", "*.md"]
+
+[tool.ruff.lint]
+# The rule families that earn their keep in a test suite:
+#
+#   E, W   pycodestyle — style, mostly handled by the formatter
+#   F      pyflakes — unused imports and undefined names
+#   I      isort — import order
+#   B      flake8-bugbear — real bug patterns, including B011 (`assert False`)
+#          and B017 (`pytest.raises(Exception)`, which passes on ANY exception
+#          and is the single most common way to write a negative test that
+#          cannot fail for the stated reason)
+#   PT     flake8-pytest-style — pytest-specific mistakes: a fixture called
+#          directly, `pytest.raises` without `match`, a parametrize value that
+#          is a tuple when it should be a list
+#   UP     pyupgrade — syntax that the target Python already supersedes
+#   RUF    Ruff's own rules
+select = ["E", "W", "F", "I", "B", "PT", "UP", "SIM", "RUF"]
+
+ignore = [
+    # The formatter owns line breaking; E501 would duplicate it and disagree at
+    # the margins.
+    "E501",
+]
+
+[tool.ruff.lint.per-file-ignores]
+# A conftest fixture is referenced by NAME, never imported, so a "redefinition"
+# of an imported name is how fixtures legitimately work.
+"tests/conftest.py" = ["F811"]
+
+[tool.ruff.lint.flake8-pytest-style]
+# `pytest.raises(X, match=...)` required: without `match`, the test passes when
+# the right exception type is raised for entirely the wrong reason.
+raises-require-match-for = ["requests.HTTPError", "ValueError", "AssertionError"]
+
+[tool.ruff.format]
+quote-style = "double"
+indent-style = "space"

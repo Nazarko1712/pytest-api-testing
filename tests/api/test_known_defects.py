@@ -20,7 +20,7 @@ from __future__ import annotations
 import pytest
 import requests
 
-from src.client import Booking, BookingClient, BookingDates
+from src.client import Booking, BookingClient
 
 
 @pytest.mark.defect
@@ -74,7 +74,11 @@ def test_404_body_is_not_json_despite_the_accept_header(client: BookingClient) -
     # text body makes a blind .json() raise JSONDecodeError on a perfectly
     # expected 404 — the failure then reads as a client bug rather than as the
     # API ignoring the Accept header. src.client._body tolerates it.
-    with pytest.raises(ValueError):
+    # The specific class, not the base `ValueError`: `requests` raises
+    # JSONDecodeError here, and asserting on the broad base class would also
+    # pass if `.json()` failed for some unrelated reason — which is exactly
+    # what Ruff's PT011 warns about.
+    with pytest.raises(requests.exceptions.JSONDecodeError):
         response.json()
 
     assert response.text.strip() != ""
@@ -110,9 +114,7 @@ def test_put_with_a_partial_body_is_correctly_rejected(
     ["not-a-number", "-1", "0"],
     ids=["text", "negative", "zero"],
 )
-def test_unparseable_ids_answer_404_rather_than_400(
-    client: BookingClient, booking_id: str
-) -> None:
+def test_unparseable_ids_answer_404_rather_than_400(client: BookingClient, booking_id: str) -> None:
     """Arguable rather than plainly wrong.
 
     400 Bad Request would describe "this is not an id" more precisely than 404
@@ -130,8 +132,14 @@ def test_unparseable_ids_answer_404_rather_than_400(
 @pytest.mark.parametrize(
     "booking_id",
     ["1.5", "1.9", "01", "1abc", "1-", "1 "],
-    ids=["decimal", "decimal-rounds-up", "leading-zero", "trailing-text",
-         "trailing-hyphen", "trailing-space"],
+    ids=[
+        "decimal",
+        "decimal-rounds-up",
+        "leading-zero",
+        "trailing-text",
+        "trailing-hyphen",
+        "trailing-space",
+    ],
 )
 def test_ids_with_trailing_junk_silently_resolve_to_a_real_booking(
     client: BookingClient, booking_id: str

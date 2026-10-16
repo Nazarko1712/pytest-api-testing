@@ -11,6 +11,31 @@ on:
   workflow_dispatch:
 
 jobs:
+  # Lint is its own job: it needs no network, so it still reports a verdict on
+  # the day the public demo API is down and the test job cannot run at all.
+  lint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+
+      - run: pip install -r requirements-dev.txt
+
+      # `--output-format=github` turns each finding into an inline annotation
+      # on the pull request diff instead of a line in the job log.
+      - name: Ruff lint
+        run: ruff check --output-format=github .
+
+      # `--check`, never the formatter itself: CI reports, it does not rewrite
+      # the branch it was asked to verify.
+      - name: Ruff format
+        run: ruff format --check .
+
   test:
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -43,4 +68,20 @@ jobs:
         run: pytest -m smoke -v
 
       - name: Full suite
-        run: pytest -n 2 -v
+        run: |
+          pip install -r requirements-dev.txt
+          pytest -n 2 -v \
+            --junitxml=reports/junit.xml \
+            --html=reports/report.html --self-contained-html
+
+      # Two reports because they answer different questions. JUnit XML is for
+      # the machine: GitHub annotates the failing test by name instead of
+      # leaving it in the log. The self-contained HTML is for a human opening
+      # the artifact later — one file, no assets, so it still renders when
+      # downloaded.
+      - uses: actions/upload-artifact@v4
+        if: ${{ !cancelled() }}
+        with:
+          name: pytest-report-${{ matrix.python-version }}
+          path: reports/
+          retention-days: 14

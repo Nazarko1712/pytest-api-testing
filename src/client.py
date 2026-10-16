@@ -11,7 +11,7 @@ branches on, so negative cases travel the same code path as positive ones.
 from __future__ import annotations
 
 import os
-from dataclasses import dataclass, asdict, field
+from dataclasses import asdict, dataclass, field
 from typing import Any
 
 import requests
@@ -30,9 +30,7 @@ class UnexpectedStatus(AssertionError):
     """
 
     def __init__(self, method: str, path: str, expected: int, actual: int, body: str) -> None:
-        super().__init__(
-            f"{method} {path} -> {actual}, expected {expected}. Body: {body[:200]}"
-        )
+        super().__init__(f"{method} {path} -> {actual}, expected {expected}. Body: {body[:200]}")
         self.expected = expected
         self.actual = actual
 

@@ -20,6 +20,7 @@ The practical consequences, all visible below:
 
 from __future__ import annotations
 
+import contextlib
 import random
 import string
 from collections.abc import Iterator
@@ -114,9 +115,7 @@ def created_booking(
 
     yield {"id": booking_id, "payload": new_booking, "response": created}
 
-    try:
+    # Already gone is fine — a delete test may have removed it. Cleanup must
+    # never turn a passing test into a failing one.
+    with contextlib.suppress(AssertionError):
         client.delete(booking_id, token)
-    except AssertionError:
-        # Already gone — a delete test may have removed it. Cleanup must never
-        # turn a passing test into a failing one.
-        pass

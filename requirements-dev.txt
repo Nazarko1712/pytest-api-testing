@@ -1,0 +1,14 @@
+# Tooling, kept OUT of requirements.txt on purpose.
+#
+# requirements.txt is what the suite needs to run — a reviewer cloning this repo
+# to see the tests pass should not also install a linter and a report renderer.
+# Splitting the two also keeps the CI install honest: the test job proves the
+# suite runs on the production dependency set alone.
+#
+# Install both with:  pip install -r requirements.txt -r requirements-dev.txt
+
+Jinja2==3.1.6
+MarkupSafe==3.0.4
+pytest-html==4.2.0
+pytest-metadata==3.1.1
+ruff==0.17.1

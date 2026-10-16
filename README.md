@@ -181,3 +181,75 @@ cheapest time to fix it.
 **Omitted is not null.** `Booking.payload()` deletes an unset optional field
 rather than serialising `None` — sending `additionalneeds: null` is a different
 request from omitting it, and an API is entitled to treat them differently.
+## Linting and reports
+
+```bash
+pip install -r requirements.txt -r requirements-dev.txt
+
+ruff check .            # lint
+ruff check --fix .      # auto-fixable rules only
+ruff format .           # format, writes
+ruff format --check .   # format, reports (this is what CI runs)
+```
+
+Ruff replaces the usual Python stack — flake8, isort, black, pyupgrade and
+several plugins — with one tool and one config block, for the same reason the
+JavaScript projects here use ESLint plus Prettier and nothing else: every extra
+tool is one more config file that drifts out of agreement with the others.
+
+The rule families selected are the ones that catch a test which cannot fail:
+
+| Family | What it catches |
+|---|---|
+| `B` (bugbear) | `B017` — `pytest.raises(Exception)` passes on **any** exception, the most common way to write a negative test that cannot fail for the stated reason |
+| `PT` (pytest-style) | a fixture called directly, `pytest.raises` without `match`, a parametrize value shaped wrongly |
+| `F` (pyflakes) | unused imports, undefined names |
+| `SIM`, `UP`, `I` | simplifications, outdated syntax, import order |
+
+Three of the five findings were worth fixing properly rather than suppressing:
+
+- **`PT012`** — the authorization matrix dispatched `put`/`patch`/`delete` with
+  an `if/elif/else` *inside* the `pytest.raises` block. The rule's reasoning is
+  sound: any extra statement in that block can itself raise the expected
+  exception, and the test then passes for a reason unrelated to the operation
+  under test. The dispatch is now a dict of callables resolved before the block,
+  leaving exactly one call inside it.
+- **`PT011`** — `pytest.raises(ValueError)` around `response.json()` would also
+  pass if `.json()` failed for some unrelated reason. Narrowed to
+  `requests.exceptions.JSONDecodeError`.
+- **`SIM105`** — the `try/except AssertionError: pass` in the cleanup fixture is
+  now `contextlib.suppress(AssertionError)`, which states the intent instead of
+  implying it.
+
+`tests/conftest.py` keeps a scoped `F811` exemption: a fixture is referenced by
+**name** and never imported, so what looks like a redefinition is how fixtures
+legitimately work.
+
+### Reports
+
+```bash
+pytest --junitxml=reports/junit.xml                      # for CI
+pytest --html=reports/report.html --self-contained-html  # for a human
+```
+
+Two formats because they answer different questions. JUnit XML is built into
+pytest and is what GitHub Actions parses to annotate the failing test by name.
+The `--self-contained-html` report inlines its CSS and JavaScript into a single
+file, so it still renders correctly after being downloaded from an artifact —
+the plain version does not, which is how a report arrives looking broken.
+
+The tooling lives in `requirements-dev.txt`, deliberately apart from
+`requirements.txt`: somebody cloning this repo to watch the tests pass should not
+have to install a linter and a report renderer, and keeping them separate proves
+in CI that the suite runs on the production dependency set alone.
+
+### Where this runs in CI
+
+Linting and formatting are their **own job**, not steps inside the test job.
+They need no browser, no network and no secrets, and they finish in seconds, so
+as a separate job they run concurrently with the suite: a formatting failure
+does not wait behind a long test run, and a real test failure is not hidden
+behind a formatting failure. Both verdicts arrive on their own.
+
+CI runs the `--check` variants, never the formatter itself. A pipeline reports
+on the branch it was asked to verify; it does not rewrite it.

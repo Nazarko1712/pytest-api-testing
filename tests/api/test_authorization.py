@@ -63,13 +63,19 @@ def test_writes_are_refused_without_a_valid_token(
         bookingdates=BookingDates(checkin="2026-11-01", checkout="2026-11-02"),
     )
 
+    # The dispatch is resolved BEFORE the raises block rather than inside it.
+    # Ruff's PT012 is right about why: any extra statement inside the block can
+    # itself raise the expected exception, and the test then passes for a reason
+    # that has nothing to do with the operation under test. One call inside the
+    # block means the assertion is unambiguous.
+    operations = {
+        "put": lambda: client.replace(booking_id, replacement, bad_token),
+        "patch": lambda: client.update(booking_id, {"totalprice": 1}, bad_token),
+        "delete": lambda: client.delete(booking_id, bad_token, expected=201),
+    }
+
     with pytest.raises(UnexpectedStatus) as failure:
-        if operation == "put":
-            client.replace(booking_id, replacement, bad_token)
-        elif operation == "patch":
-            client.update(booking_id, {"totalprice": 1}, bad_token)
-        else:
-            client.delete(booking_id, bad_token, expected=201)
+        operations[operation]()
 
     assert failure.value.actual == 403
 
